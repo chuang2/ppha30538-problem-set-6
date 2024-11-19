@@ -84,6 +84,17 @@ import json
 1. 
 
 ```{python}
+import zipfile
+
+zipfile_path = "/Users/charleshuang/Documents/GitHub/real_merge_example/ppha30538-problem-set-6/waze_data.zip"
+
+extract_to = "/Users/charleshuang/Documents/GitHub/real_merge_example/ppha30538-problem-set-6"
+
+with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
+    zip_ref.extractall(extract_to)
+
+print(f"Files have been extracted to {extract_to}")
+
 
 ```
 
