@@ -98,6 +98,34 @@ print(f"Files have been extracted to {extract_to}")
 
 ```
 
+Loading waze sample data into a df:
+
+```{python}
+wz_sample = pd.read_csv("waze_data_sample.csv", index_col=None)
+
+wz_sample.head()
+wz_sample = wz_sample.drop(columns=["Unnamed: 0"])
+
+#Variable names:
+
+wz_vars = wz_sample.columns
+print(wz_vars)
+
+#using altair syntax
+wz_data_types = "Nominal", "Quantitative", "Quantitative", "Nominal", "Nominal", "Nominal", "Nominal", "Nominal", "Nominal", "Quantitative", "Quantitative", "Ordinal", "N/A", "N/A", "N/A"
+
+```
+
+We can create a table of variable names and data types below:
+```{python}
+vars_and_types = pd.DataFrame({
+  'Variable Names': wz_vars,
+  'Variable Types': wz_data_types
+})
+
+print(vars_and_types)
+```
+
 2. 
 
 ```{python}
