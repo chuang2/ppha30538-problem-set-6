@@ -344,9 +344,14 @@ print(f"There are {len(wz_filter)} rows for Accident - Unclassified type inciden
 
 
 ```
-
+Extra Credit: 
 ```{python}
-#Extra credit: Use drop_duplicates() to find the same combinations of values in type and subtype
+#Extra credit: Use drop_duplicates() to find the same combinations of values in type and subtype for crosswalk and the merged dataset
+
+print(crosswalk[['updated_type', 'updated_subtype']].drop_duplicates())
+print(wz_merge[['updated_type', 'updated_subtype']].drop_duplicates())
+
+
 
 ```
 
