@@ -130,15 +130,225 @@ print(vars_and_types)
 
 ```{python}
 
-```
+wz_full = pd.read_csv("waze_data.csv", index_col=None)
 
-3. 
+wz_full.head()
+
+#Create a stacked bar chart where x axis is each variable and it shows proportion of missing vs. non missing values
+#To do this, we need to create a function and then apply() it to each variable in the df
+
+def calc_missing(column):
+    missing_no = column.isna().sum()
+    non_missing_no = len(column) - missing_no
+    return pd.Series({'Missing': missing_no, 'Non-missing': non_missing_no})
+
+missing_counts = wz_full.apply(calc_missing)
+print(missing_counts)
+
+#This needs to be converted from wide to long so that each variable (city, confidence, etc.) is in one col. We can do this using melt
+
+missing_counts_long = missing_counts.reset_index().melt(
+    id_vars='index',
+    var_name='Variable Name',
+    value_name='Count of Observations'
+)
+print(missing_counts_long)
+
+
+wz_missing_stacked = alt.Chart(missing_counts_long).mark_bar().encode(
+  x='Variable Name',
+  y='Count of Observations',
+  color='index'
+)
+
+wz_missing_stacked
+
+```
+We can see that nThumbsUp, street, and subtype have missing values, with nThumbsUp having the largest proportion of missing values.
+
+3. Print the unique values for columns type and subtype:
 
 ```{python}
+#We need to group the data by type, and then list the subtypes for each type
+
+wz_group_by_type = wz_full.groupby('type')
+pd.set_option('display.max_colwidth', None)
+
+full_subtypes = (wz_group_by_type['subtype'].unique())
+print(full_subtypes)
+
+subtypes_list = wz_full['subtype'].unique()
+print(subtypes_list)
 
 ```
 
+We can see that all four types (ACCIDENT, HAZARD, JAM, ROAD_CLOSED) have the NA subtype. We can also see that the HAZARD type has enough similar subtypes to consider the possibility of sub-subtypes (e.g. HAZARD_ON_ROAD_CAR_STOPPED, HAZARD_ON_ROAD_CONSTRUCTION, HAZARD_ON_ROAD_EMERGENCY_VEHICLE, etc. could have a HAZARD_ON_ROAD sub-subtype)
+
+Bulleted Hierarchy:
+-Accident
+    -Major
+    -Minor
+    -NA (Unclassified)
+-Hazard
+    -On Road
+        -Stopped Car
+        -Construction
+        -Emergency Vehicle
+        -Ice
+        -Object
+        -Pot Hole
+        -Traffic Light Fault
+        -Lane Closed
+        -Roadkill
+    -On Shoulder
+        -Stopped Car
+        -Animals
+        -Missing Sign
+    -Weather
+        -Floor
+        -Fog
+        -Heavy Snow
+        -Hail
+    -NA (Unclassified)
+-Jam
+    -Standstill Traffic
+    -Heavy Traffic
+    -Moderate Traffic
+    -Light Traffic
+    -NA (Unclassified)
+-Road Closed
+    -Event
+    -Construction
+    -Hazard
+    -NA (Unclassified)
+
+Should we keep the NA subtypes or not?
+
+To answer this let's run a count of NA values by type:
+```{python}
+na_counts = wz_full.groupby('type')['subtype'].apply(lambda incident_type: incident_type.isna().sum())
+print(na_counts)
+
+```
+Over 90,000 (12%) of our observations have a NA subtype, which represent a significant slice of our data. We can also see that some accident types are disproportionately affected by NAs more than others; over half of NA values are JAM-type incidents (which makes sense, since heavy, moderate, and light traffic is very subjective). Simply moving NAs could thus potentially introduce bias.
+
 4. 
+4a. Define a crosswalk df:
+```{python}
+col_names = ["type", "subtype", "updated_type", "updated_subtype", "updated_subsubtype"]
+crosswalk = pd.DataFrame(columns=col_names)
+
+```
+
+4b. Fill in the crosswalk with all unique combinations of type/subtype, then fill in updated_type, updated_subtype, and updated_subsubtype accordingly
+
+(We can do this using drop_duplicates)
+```{python}
+
+unique_combinations = wz_full[['type', 'subtype']].drop_duplicates()
+crosswalk[['type', 'subtype']] = unique_combinations.reset_index(drop=True)
+
+crosswalk = crosswalk.fillna("Unclassified")
+
+#We can create a mapping function to copy over the types into updated_type using a dictionary:
+
+def modify_type(value):
+    replacements = {
+    "JAM": "Jam",
+    "ACCIDENT": "Accident",
+    "ROAD_CLOSED": "Road Closed",
+    "HAZARD": "Hazard"
+    }
+    return replacements.get(value)
+
+crosswalk['updated_type'] = crosswalk['type'].apply(modify_type)
+
+def modify_subtype(value):
+    if "HAZARD_ON_ROAD" in value:
+        return "Hazard - Road"
+    elif "HAZARD_ON_SHOULDER" in value:
+        return "Hazard - Shoulder"
+    elif "HAZARD_ON_WEATHER" in value:
+        return "Hazard - Weather"
+    else:
+        return value
+
+#if subtype in one of the three hazard subsubtypes, return a special subtype
+#otherwise return the value as is...BUT it needs to be cleaned instead of being in all caps/underscores
+
+def modify_subsubtype(value):
+    replacements = {
+    "ACCIDENT_MAJOR": "Major Accident",
+    "ACCIDENT_MINOR": "Minor Accident",
+    "HAZARD_ON_ROAD": "Road Hazard",
+    "HAZARD_ON_ROAD_CAR_STOPPED": "Stopped Car (Road)",
+    "HAZARD_ON_ROAD_CONSTRUCTION": "Construction",
+    "HAZARD_ON_ROAD_EMERGENCY_VEHICLE": "Emergency Vehicle",
+    "HAZARD_ON_ROAD_ICE": "Ice",
+    "HAZARD_ON_ROAD_OBJECT": "Object on Road",
+    "HAZARD_ON_ROAD_POT_HOLE": "Pot Hole",
+    "HAZARD_ON_ROAD_TRAFFIC_LIGHT_FAULT": "Traffic Light Fault",
+    "HAZARD_ON_ROAD_LANE_CLOSED": "Lane Closure",
+    "HAZARD_ON_ROAD_ROAD_KILL": "Roadkill",
+    "HAZARD_ON_SHOULDER": "Shoulder Hazard",
+    "HAZARD_ON_SHOULDER_CAR_STOPPED": "Stopped Car (Shoulder)",
+    "HAZARD_ON_SHOULDER_ANIMALS": "Animals",
+    "HAZARD_ON_SHOULDER_MISSING_SIGN": "Missing Sign",
+    "HAZARD_WEATHER": "Weather",
+    "HAZARD_WEATHER_FLOOD": "Flood",
+    "HAZARD_WEATHER_HAIL": "Hail",
+    "HAZARD_WEATHER_FOG": "Fog",
+    "HAZARD_WEATHER_HEAVY_SNOW": "Heavy Snow",
+    "JAM_HEAVY_TRAFFIC": "Heavy Traffic",
+    "JAM_MODERATE_TRAFFIC": "Moderate Traffic",
+    "JAM_STAND_STILL_TRAFFIC": "Standstill Traffic",
+    "JAM_LIGHT_TRAFFIC": "Light Traffic",
+    "ROAD_CLOSED_EVENT": "Event",
+    "ROAD_CLOSED_HAZARD": "Hazard",
+    "ROAD_CLOSED_CONSTRUCTION": "Construction",
+    }
+    return replacements.get(value)
+
+crosswalk['updated_subtype'] = crosswalk['subtype'].apply(modify_type)
+
+
+```
+-Accident
+    -Major
+    -Minor
+    -NA (Unclassified)
+-Hazard
+    -On Road
+        -Stopped Car
+        -Construction
+        -Emergency Vehicle
+        -Ice
+        -Object
+        -Pot Hole
+        -Traffic Light Fault
+        -Lane Closed
+        -Roadkill
+    -On Shoulder
+        -Stopped Car
+        -Animals
+        -Missing Sign
+    -Weather
+        -Floor
+        -Fog
+        -Heavy Snow
+        -Hail
+    -NA (Unclassified)
+-Jam
+    -Standstill Traffic
+    -Heavy Traffic
+    -Moderate Traffic
+    -Light Traffic
+    -NA (Unclassified)
+-Road Closed
+    -Event
+    -Construction
+    -Hazard
+    -NA (Unclassified)
 
 1. 
 ```{python}
