@@ -245,10 +245,10 @@ crosswalk = pd.DataFrame(columns=col_names)
 (We can do this using drop_duplicates)
 ```{python}
 
+wz_full = wz_full.fillna("Unclassified")
+
 unique_combinations = wz_full[['type', 'subtype']].drop_duplicates()
 crosswalk[['type', 'subtype']] = unique_combinations.reset_index(drop=True)
-
-crosswalk = crosswalk.fillna("Unclassified")
 
 #We can create a mapping function to copy over the types into updated_type using a dictionary:
 
@@ -261,8 +261,6 @@ def modify_type(value):
     }
     return replacements.get(value)
 
-crosswalk['updated_type'] = crosswalk['type'].apply(modify_type)
-
 def modify_subtype(value):
     if "HAZARD_ON_ROAD" in value:
         return "Hazard - Road"
@@ -273,13 +271,11 @@ def modify_subtype(value):
     else:
         return value
 
-#if subtype in one of the three hazard subsubtypes, return a special subtype
-#otherwise return the value as is...BUT it needs to be cleaned instead of being in all caps/underscores
-
 def modify_subsubtype(value):
     replacements = {
+    "Unclassified": "Unclassified",
     "ACCIDENT_MAJOR": "Major Accident",
-    "ACCIDENT_MINOR": "Minor Accident",
+    "ACCIDENT_MINOR": "Minor Accident",   
     "HAZARD_ON_ROAD": "Road Hazard",
     "HAZARD_ON_ROAD_CAR_STOPPED": "Stopped Car (Road)",
     "HAZARD_ON_ROAD_CONSTRUCTION": "Construction",
@@ -309,49 +305,48 @@ def modify_subsubtype(value):
     }
     return replacements.get(value)
 
-crosswalk['updated_subtype'] = crosswalk['subtype'].apply(modify_type)
+crosswalk['updated_type'] = crosswalk['type'].apply(modify_type)
+crosswalk['updated_subtype'] = crosswalk['subtype'].apply(modify_subtype)
+crosswalk['updated_subsubtype'] = crosswalk['subtype'].apply(modify_subsubtype)
 
+#This code will clean up the lingering old variable names in updated_subtype 
+
+def transpose_subtype(subtype, subsubtype):
+    if "_" in subtype:
+        return subsubtype
+    else:
+        return subtype
+
+crosswalk['updated_subtype'] = crosswalk.apply(lambda row: transpose_subtype(row['updated_subtype'], row['updated_subsubtype']), axis=1)
+
+#This code removes duplicate subsubtypes where they're not needed or where subsubtypes don't exist bc a subtype is sufficient
+def remove_subsubtypes(subtype, subsubtype):
+    if subtype == subsubtype:
+        return "Unclassified"
+    else:
+        return subsubtype
+
+crosswalk['updated_subsubtype'] = crosswalk.apply(lambda row: remove_subsubtypes(row['updated_subtype'], row['updated_subsubtype']), axis=1)
 
 ```
--Accident
-    -Major
-    -Minor
-    -NA (Unclassified)
--Hazard
-    -On Road
-        -Stopped Car
-        -Construction
-        -Emergency Vehicle
-        -Ice
-        -Object
-        -Pot Hole
-        -Traffic Light Fault
-        -Lane Closed
-        -Roadkill
-    -On Shoulder
-        -Stopped Car
-        -Animals
-        -Missing Sign
-    -Weather
-        -Floor
-        -Fog
-        -Heavy Snow
-        -Hail
-    -NA (Unclassified)
--Jam
-    -Standstill Traffic
-    -Heavy Traffic
-    -Moderate Traffic
-    -Light Traffic
-    -NA (Unclassified)
--Road Closed
-    -Event
-    -Construction
-    -Hazard
-    -NA (Unclassified)
+4c. Merge the crosswalk with the original data set on type and subtype. How many rows are there for Accident - Unclassified?
 
 1. 
 ```{python}
+print(crosswalk.columns)
+print(wz_full.columns)
+
+wz_merge = pd.merge(crosswalk, wz_full, on=['type', 'subtype'], how='inner')
+
+wz_filter = wz_merge[(wz_merge["updated_type"]  == "Accident") & (wz_merge["updated_subtype"] == "Unclassified")]
+
+print(f"There are {len(wz_filter)} rows for Accident - Unclassified type incidents.")
+
+
+```
+
+```{python}
+#Extra credit: Use drop_duplicates() to find the same combinations of values in type and subtype
 
 ```
 
