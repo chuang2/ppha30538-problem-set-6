@@ -330,8 +330,7 @@ crosswalk['updated_subsubtype'] = crosswalk.apply(lambda row: remove_subsubtypes
 
 ```
 4c. Merge the crosswalk with the original data set on type and subtype. How many rows are there for Accident - Unclassified?
-
-1. 
+ 
 ```{python}
 print(crosswalk.columns)
 print(wz_full.columns)
@@ -348,55 +347,95 @@ Extra Credit:
 ```{python}
 #Extra credit: Use drop_duplicates() to find the same combinations of values in type and subtype for crosswalk and the merged dataset
 
-print(crosswalk[['updated_type', 'updated_subtype']].drop_duplicates())
-print(wz_merge[['updated_type', 'updated_subtype']].drop_duplicates())
+set_cw = (crosswalk[['updated_type', 'updated_subtype']].drop_duplicates()).reset_index(drop=True)
+set_wzm = (wz_merge[['updated_type', 'updated_subtype']].drop_duplicates()).reset_index(drop=True)
 
-#test
+#This results in two dfs where each row is a combination of unique updated_type and updated_subtype
+#Attribution: Asked ChatGPT how to compare these two df's combinations of type and subtype regardless of order- my previous code compared the columns directly using a pairwise comparison
+# Tuples have no order, so using itertuples lets us compare the combinations of type and subtype regardless of order
 
+set_cw_tuples = set(set_cw.itertuples(index=False, name=None))
+set_wzm_tuples = set(set_wzm.itertuples(index=False, name=None))
 
-```
+print(set_cw_tuples == set_wzm_tuples)
 
-2. 
-
-```{python}
-
-```
-
-3. 
-
-```{python}
 
 ```
 
-4. 
-
-```{python}
-
-```
 
 
 # App #1: Top Location by Alert Type Dashboard (30 points){-}
 
 1. 
 
-a. 
+
 ```{python}
+#placeholder app
+from shiny import App, render, ui
+
+app_ui = ui.page_fluid(
+    #placeholder code
+)
+
+def server(input, output, session):
+    #placeholder python
+
+app = App(app_ui, server)
 
 ```
 
-b. 
+a. Use regex to extract latitude/longitude from the geo variable in the data
 ```{python}
+#Attribution: Used ChatGPT by prompting "How to extract latitude and longitude from the geoWKT variable using regex" with a screenshot of the data. Response was to use the following code (substituting df for wz_merge:)
+
+wz_merge[['longitude', 'latitude']] = wz_merge['geoWKT'].str.extract(r'Point\((-?\d+\.\d+)\s(-?\d+\.\d+)\)')
 
 ```
 
+b. Put the latitude/longitude data into bins. Which long/lat combination has the greatest number of observations?
+```{python}
+wz_merge['longitude'] = pd.to_numeric(wz_merge['longitude']).round(2)
+wz_merge['latitude'] = pd.to_numeric(wz_merge['latitude']).round(2)
+
+wz_grouped = wz_merge.groupby(['longitude', 'latitude']).size().reset_index(name="count")
+
+wz_grouped.sort_values(by="count", ascending=False).head()
+
+```
+We can see that the combination (41.88, -87.65) has the greatest number of observations (21,325 rows).
 
 c. 
 ```{python}
+wz_by_type = wz_merge.groupby(['longitude', 'latitude', 'updated_type', 'updated_subtype']).size().reset_index(name="count")
+
+top_wz = wz_by_type.sort_values(by="count", ascending=False)
+
+top_wz.to_csv('top_alerts_map/top_alerts_map.csv', index=False)
+
+print(f"This dataset has {len(top_wz)} rows.")
 
 ```
 
-d. 
+Each row in this dataframe (top_10_wz) should correspond to a 4-way combination of longitude, latitude, type, and subtype, with the number of alerts for that particular combination.
+
+
+2. 
+
+Using altair, plot a scatterplot of the top 10 latitude-longitude bins for "Jam - Heavy Traffic Alerts"
+
 ```{python}
+
+top_10_wz = top_wz[(top_wz["updated_type"] == "Jam") & (top_wz["updated_subtype"] == "Heavy Traffic")].sort_values(by="count", ascending=False).head(10)
+
+jam_plot = alt.Chart(top_10_wz).mark_circle().encode(
+    x=alt.X("longitude:Q", scale=alt.Scale(domain=[-87.8, -87.6])),
+    y=alt.Y("latitude:Q", scale=alt.Scale(domain=[41.8, 42.1])),
+    size=alt.Size("count:Q", title="Count of Alerts"),
+    color=alt.Color("count:Q"),
+    tooltip=["longitude", "latitude", "count"]
+)
+
+jam_plot
 
 ```
 
