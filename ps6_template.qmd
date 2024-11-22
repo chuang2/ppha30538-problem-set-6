@@ -439,11 +439,29 @@ jam_plot
 
 ```
 
-3. 
+3. Next, we will layer this scatterplot on a map of Chicago:
     
-a. 
+a. Download the neighborhood boundaries as a GeoJSON:
 
 ```{python}
+print(os.getcwd())
+```
+
+```{python}
+#Attribution: Asked ChatGPT to explain the requests package in python
+import requests
+
+url = "https://data.cityofchicago.org/api/geospatial/bbvz-uum9?method=export&format=GeoJSON"
+filepath = "neighborhood_boundaries.geojson"
+
+response = requests.get(url)
+#this creates a reponse object with a status_code attribute
+if response.status_code == 200:
+    with open(filepath, "wb") as file:
+        file.write(response.content)    
+else:
+    print("Error: HTTP Status Code {response.status_code}")
+
 
 ```
     
@@ -451,7 +469,10 @@ a.
 b. 
 ```{python}
 # MODIFY ACCORDINGLY
-file_path = "./top_alerts_map/chicago-boundaries.geojson"
+
+import geopandas as gpd
+
+file_path = "/Users/charleshuang/Documents/GitHub/real_merge_example/ppha30538-problem-set-6/neighborhood_boundaries.geojson"
 #----
 
 with open(file_path) as f:
@@ -461,9 +482,69 @@ geo_data = alt.Data(values=chicago_geojson["features"])
 
 ```
 
-4. 
+
+
+4. Layer the scatterplot from the previous step onto the new map
+
 
 ```{python}
+
+chicago_map = alt.Chart(geo_data).mark_circle().encode(
+    longitude='longitude:Q',
+    latitude='latitude:Q',
+    size=alt.value(10),
+    tooltip=["pri_neigh:N", "sec_neigh:N"]
+).project(
+    "equirectangular"
+)
+chicago_map
+
+```
+
+```{python}
+#Test code
+import geopandas as gpd
+import pandas as pd
+import json
+
+# Load GeoJSON file
+file_path = "/Users/charleshuang/Documents/GitHub/real_merge_example/ppha30538-problem-set-6/neighborhood_boundaries.geojson"
+with open(file_path) as f:
+    chicago_geojson = json.load(f)
+
+# Convert GeoJSON to GeoDataFrame
+gdf = gpd.GeoDataFrame.from_features(chicago_geojson["features"])
+
+# Set the CRS (assuming WGS84 - EPSG 4326)
+gdf.set_crs(epsg=4326, inplace=True)
+
+# Reproject if needed (in this case, not necessary since it's already WGS84)
+gdf = gdf.to_crs(epsg=4326)
+
+# Extract centroids
+gdf["longitude"] = gdf.geometry.centroid.x
+gdf["latitude"] = gdf.geometry.centroid.y
+
+# Flatten to a DataFrame for Altair
+df_chicago = pd.DataFrame(gdf)
+
+
+chicago_map = alt.Chart(alt.Data(values=chicago_geojson["features"])).mark_geoshape().encode(
+    tooltip=["properties.pri_neigh:N", "properties.sec_neigh:N"]
+).project(
+    type="equirectangular"
+).properties(
+    width=400,
+    height=300,
+    title="Chicago Neighborhoods"
+)
+
+chicago_map
+
+
+
+
+
 
 ```
 
